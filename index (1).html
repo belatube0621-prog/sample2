@@ -1,0 +1,2420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Ordering System</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #ef4444;
+            --secondary-color: #1f2937;
+            --accent-color: #f59e0b;
+            --bg-color: #f3f4f6;
+        }
+        body {
+            background-color: var(--bg-color);
+        }
+        .primary-bg { background-color: var(--primary-color); }
+        .secondary-bg { background-color: var(--secondary-color); }
+        .accent-bg { background-color: var(--accent-color); }
+        .primary-text { color: var(--primary-color); }
+        .notification-bell.has-notifications::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 12px;
+            height: 12px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .notification-toast {
+            animation: slideIn 0.3s ease-out;
+        }
+        .modal-animate {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .menu-item-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        .menu-item-card {
+            transition: all 0.3s ease;
+        }
+        .dashboard-btn.active {
+            background: white;
+            color: var(--primary-color);
+        }
+        .dashboard-btn.locked {
+            opacity: 0.7;
+        }
+        .dashboard-btn.locked::after {
+            content: '🔒';
+            margin-left: 4px;
+            font-size: 10px;
+        }
+        .dashboard-btn.unlocked::after {
+            content: '🔓';
+            margin-left: 4px;
+            font-size: 10px;
+        }
+        .order-card {
+            transition: all 0.3s ease;
+        }
+        .order-card:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Notification Toast Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-[100] space-y-2"></div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full modal-animate shadow-2xl overflow-hidden">
+            <div id="loginModalHeader" class="bg-orange-600 text-white p-6">
+                <div class="flex items-center gap-3">
+                    <i id="loginModalIcon" class="fas fa-utensils text-3xl"></i>
+                    <div>
+                        <h2 id="loginModalTitle" class="text-2xl font-bold">Kitchen Login</h2>
+                        <p id="loginModalSubtitle" class="text-sm opacity-80">Enter your credentials to access</p>
+                    </div>
+                </div>
+            </div>
+            <form onsubmit="handleLogin(event)" class="p-6">
+                <input type="hidden" id="loginType" value="kitchen">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">
+                            <i class="fas fa-user mr-2 text-gray-400"></i>Username
+                        </label>
+                        <input type="text" id="loginUsername" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none" placeholder="Enter username" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">
+                            <i class="fas fa-lock mr-2 text-gray-400"></i>Password
+                        </label>
+                        <div class="relative">
+                            <input type="password" id="loginPassword" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none pr-10" placeholder="Enter password" required>
+                            <button type="button" onclick="togglePasswordVisibility('loginPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p id="loginError" class="text-red-500 text-sm hidden">
+                        <i class="fas fa-exclamation-circle mr-1"></i>
+                        <span>Invalid username or password</span>
+                    </p>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button type="button" onclick="closeLoginModal()" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" id="loginSubmitBtn" class="flex-1 bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 transition flex items-center justify-center gap-2">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </div>
+            </form>
+            <div class="bg-gray-50 px-6 py-4 border-t">
+                <p class="text-xs text-gray-500 text-center">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Contact the owner if you forgot your credentials
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Selector -->
+    <div id="dashboardSelector" class="fixed top-0 left-0 right-0 z-50 secondary-bg">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between py-2">
+                <div class="flex items-center space-x-2">
+                    <img id="selectorLogo" src="https://images.unsplash.com/photo-1567521464027-f127ff144326?w=100" alt="Logo" class="w-10 h-10 rounded-full object-cover">
+                    <span id="selectorName" class="text-white font-bold hidden md:inline">Gourmet Kitchen</span>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="switchDashboard('guest')" class="dashboard-btn px-4 py-2 rounded-lg text-white hover:bg-white/20 transition flex items-center gap-2" data-dashboard="guest">
+                        <i class="fas fa-user"></i>
+                        <span class="hidden md:inline">Guest</span>
+                    </button>
+                    <button onclick="handleDashboardAccess('kitchen')" class="dashboard-btn locked px-4 py-2 rounded-lg text-white hover:bg-white/20 transition flex items-center gap-2" data-dashboard="kitchen">
+                        <i class="fas fa-utensils"></i>
+                        <span class="hidden md:inline">Kitchen</span>
+                    </button>
+                    <button onclick="handleDashboardAccess('owner')" class="dashboard-btn locked px-4 py-2 rounded-lg text-white hover:bg-white/20 transition flex items-center gap-2" data-dashboard="owner">
+                        <i class="fas fa-crown"></i>
+                        <span class="hidden md:inline">Owner</span>
+                    </button>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <select id="languageSelect" class="bg-white/20 text-white rounded px-2 py-1 text-sm">
+                        <option value="en" class="text-black">🇬🇧 EN</option>
+                        <option value="es" class="text-black">🇪🇸 ES</option>
+                        <option value="fr" class="text-black">🇫🇷 FR</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== GUEST DASHBOARD ==================== -->
+    <div id="guestDashboard" class="dashboard pt-16">
+        <!-- Guest Header -->
+        <header class="primary-bg text-white shadow-lg sticky top-14 z-40">
+            <div class="container mx-auto px-4 py-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <img id="guestLogo" src="https://images.unsplash.com/photo-1567521464027-f127ff144326?w=100" alt="Logo" class="w-12 h-12 rounded-full object-cover">
+                        <div>
+                            <h1 id="guestName" class="text-xl font-bold">Gourmet Kitchen</h1>
+                            <p id="guestAddress" class="text-xs opacity-80">123 Culinary Street, Food City</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button id="guestNotificationBtn" class="relative notification-bell p-2" onclick="toggleGuestNotifications()">
+                            <i class="fas fa-bell text-xl"></i>
+                            <span id="guestNotificationCount" class="absolute -top-1 -right-1 bg-yellow-400 text-black text-xs rounded-full w-5 h-5 flex items-center justify-center hidden">0</span>
+                        </button>
+                        <button class="relative p-2" onclick="toggleCart()">
+                            <i class="fas fa-shopping-cart text-xl"></i>
+                            <span id="cartCount" class="absolute -top-1 -right-1 bg-yellow-400 text-black text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Guest Navigation -->
+        <nav class="secondary-bg text-white shadow">
+            <div class="container mx-auto px-4">
+                <div class="flex space-x-6 overflow-x-auto">
+                    <button onclick="showGuestSection('menu')" class="guest-nav-tab py-3 px-4 border-b-2 border-white transition" data-section="menu">
+                        <i class="fas fa-book-open mr-2"></i><span data-translate="menu">Menu</span>
+                    </button>
+                    <button onclick="showGuestSection('orders')" class="guest-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="orders">
+                        <i class="fas fa-history mr-2"></i><span data-translate="orderHistory">My Orders</span>
+                    </button>
+                    <button onclick="showGuestSection('contact')" class="guest-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="contact">
+                        <i class="fas fa-envelope mr-2"></i><span data-translate="contact">Contact</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Guest Main Content -->
+        <main class="container mx-auto px-4 py-6">
+            <!-- Menu Section -->
+            <section id="guestMenuSection" class="guest-section">
+                <div class="flex flex-col md:flex-row gap-4 mb-6">
+                    <div class="flex-1 relative">
+                        <input type="text" id="searchInput" placeholder="Search menu..." class="w-full pl-10 pr-4 py-3 rounded-lg border focus:ring-2 focus:ring-red-500 focus:outline-none" onkeyup="filterMenu()">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                    <div class="flex gap-2 overflow-x-auto pb-2" id="categoryFilters"></div>
+                </div>
+                <div id="menuGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+            </section>
+
+            <!-- Orders Section -->
+            <section id="guestOrdersSection" class="guest-section hidden">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                    <i class="fas fa-history primary-text"></i>
+                    <span data-translate="orderHistory">My Orders</span>
+                </h2>
+                <div id="guestOrderHistory" class="space-y-4"></div>
+            </section>
+
+            <!-- Contact Section -->
+            <section id="guestContactSection" class="guest-section hidden">
+                <h2 class="text-2xl font-bold mb-6" data-translate="contact">Contact Us</h2>
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="font-semibold text-lg mb-4"><i class="fas fa-map-marker-alt mr-2 primary-text"></i>Address</h3>
+                            <p id="contactAddress" class="text-gray-600">123 Culinary Street, Food City</p>
+                            <h3 class="font-semibold text-lg mt-6 mb-4"><i class="fas fa-share-alt mr-2 primary-text"></i>Social Media</h3>
+                            <div id="socialLinks" class="flex space-x-4 text-2xl">
+                                <a href="#" class="text-blue-600 hover:text-blue-800"><i class="fab fa-facebook"></i></a>
+                                <a href="#" class="text-pink-600 hover:text-pink-800"><i class="fab fa-instagram"></i></a>
+                                <a href="#" class="text-blue-400 hover:text-blue-600"><i class="fab fa-twitter"></i></a>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg mb-4"><i class="fas fa-paper-plane mr-2 primary-text"></i><span data-translate="sendMessage">Send us a message</span></h3>
+                            <form onsubmit="sendMessage(event)">
+                                <input type="text" placeholder="Your name" class="w-full mb-3 p-3 border rounded-lg" required>
+                                <input type="email" placeholder="Your email" class="w-full mb-3 p-3 border rounded-lg" required>
+                                <textarea placeholder="Your message" class="w-full mb-3 p-3 border rounded-lg" rows="4" required></textarea>
+                                <button type="submit" class="primary-bg text-white px-6 py-3 rounded-lg hover:opacity-90 transition">
+                                    <i class="fas fa-send mr-2"></i><span data-translate="send">Send</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Guest Footer -->
+        <footer class="secondary-bg text-white py-8 mt-8">
+            <div class="container mx-auto px-4 text-center">
+                <img id="footerLogo" src="https://images.unsplash.com/photo-1567521464027-f127ff144326?w=100" alt="Logo" class="w-16 h-16 rounded-full mx-auto mb-4 object-cover">
+                <p id="footerName" class="text-xl font-bold">Gourmet Kitchen</p>
+                <p id="footerAddress" class="text-gray-400 mt-2">123 Culinary Street, Food City</p>
+                <div id="footerSocial" class="flex justify-center space-x-6 mt-4 text-2xl">
+                    <a href="#" class="hover:text-red-500 transition"><i class="fab fa-facebook"></i></a>
+                    <a href="#" class="hover:text-red-500 transition"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="hover:text-red-500 transition"><i class="fab fa-twitter"></i></a>
+                </div>
+                <p class="text-gray-500 mt-6 text-sm">© 2024 All rights reserved</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- ==================== KITCHEN DASHBOARD ==================== -->
+    <div id="kitchenDashboard" class="dashboard hidden pt-16">
+        <header class="bg-orange-600 text-white shadow-lg sticky top-14 z-40">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-fire text-3xl"></i>
+                        <div>
+                            <h1 class="text-2xl font-bold">Kitchen Dashboard</h1>
+                            <p class="text-sm opacity-80">Logged in as: <span id="kitchenUserDisplay" class="font-semibold">kitchen</span></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-white/20 px-4 py-2 rounded-lg">
+                            <span class="text-sm">Active Orders:</span>
+                            <span id="activeOrderCount" class="font-bold text-xl ml-2">0</span>
+                        </div>
+                        <button onclick="playNotificationSound()" class="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Test Sound">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                        <button onclick="openKitchenSettings()" class="p-2 bg-white/20 rounded-lg hover:bg-white/30 flex items-center gap-2" title="Settings">
+                            <i class="fas fa-cog"></i>
+                            <span class="hidden md:inline">Settings</span>
+                        </button>
+                        <button onclick="logout('kitchen')" class="p-2 bg-red-500 rounded-lg hover:bg-red-600 flex items-center gap-2" title="Logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span class="hidden md:inline">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Kitchen Settings Modal -->
+        <div id="kitchenSettingsModal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-md w-full modal-animate shadow-2xl overflow-hidden">
+                <div class="bg-orange-600 text-white p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-user-cog text-3xl"></i>
+                            <div>
+                                <h2 class="text-2xl font-bold">Kitchen Settings</h2>
+                                <p class="text-sm opacity-80">Change your login credentials</p>
+                            </div>
+                        </div>
+                        <button onclick="closeKitchenSettings()" class="text-2xl hover:opacity-80">&times;</button>
+                    </div>
+                </div>
+                <form onsubmit="updateKitchenOwnCredentials(event)" class="p-6">
+                    <div class="space-y-4">
+                        <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                            <p class="text-sm text-orange-800">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                Enter your current password to verify your identity, then set your new credentials.
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-lock mr-2 text-gray-400"></i>Current Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="kitchenCurrentPassword" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none pr-10" placeholder="Enter current password" required>
+                                <button type="button" onclick="togglePasswordVisibility('kitchenCurrentPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <hr class="my-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-user mr-2 text-gray-400"></i>New Username
+                            </label>
+                            <input type="text" id="kitchenNewUsername" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none" placeholder="Enter new username" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-key mr-2 text-gray-400"></i>New Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="kitchenNewPassword" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none pr-10" placeholder="Enter new password" required>
+                                <button type="button" onclick="togglePasswordVisibility('kitchenNewPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-key mr-2 text-gray-400"></i>Confirm New Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="kitchenConfirmNewPassword" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none pr-10" placeholder="Confirm new password" required>
+                                <button type="button" onclick="togglePasswordVisibility('kitchenConfirmNewPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p id="kitchenSettingsError" class="text-red-500 text-sm hidden">
+                            <i class="fas fa-exclamation-circle mr-1"></i>
+                            <span></span>
+                        </p>
+                    </div>
+                    <div class="flex gap-3 mt-6">
+                        <button type="button" onclick="closeKitchenSettings()" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                            Cancel
+                        </button>
+                        <button type="submit" class="flex-1 bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 transition flex items-center justify-center gap-2">
+                            <i class="fas fa-save"></i> Update Credentials
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <main class="container mx-auto px-4 py-6">
+            <!-- Kitchen Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-yellow-100 p-4 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-yellow-800 text-sm">Pending</p>
+                            <p id="pendingCount" class="text-3xl font-bold text-yellow-600">0</p>
+                        </div>
+                        <i class="fas fa-clock text-4xl text-yellow-400"></i>
+                    </div>
+                </div>
+                <div class="bg-blue-100 p-4 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-800 text-sm">Preparing</p>
+                            <p id="preparingCount" class="text-3xl font-bold text-blue-600">0</p>
+                        </div>
+                        <i class="fas fa-fire-burner text-4xl text-blue-400"></i>
+                    </div>
+                </div>
+                <div class="bg-green-100 p-4 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-green-800 text-sm">Ready</p>
+                            <p id="readyCount" class="text-3xl font-bold text-green-600">0</p>
+                        </div>
+                        <i class="fas fa-check-circle text-4xl text-green-400"></i>
+                    </div>
+                </div>
+                <div class="bg-gray-100 p-4 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-800 text-sm">Completed Today</p>
+                            <p id="completedCount" class="text-3xl font-bold text-gray-600">0</p>
+                        </div>
+                        <i class="fas fa-trophy text-4xl text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kitchen Orders Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Pending Orders -->
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="bg-yellow-500 text-white p-4">
+                        <h2 class="text-xl font-bold flex items-center gap-2">
+                            <i class="fas fa-clock"></i> Pending Orders
+                        </h2>
+                    </div>
+                    <div id="kitchenPending" class="p-4 space-y-3 max-h-[60vh] overflow-y-auto"></div>
+                </div>
+
+                <!-- Preparing Orders -->
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="bg-blue-500 text-white p-4">
+                        <h2 class="text-xl font-bold flex items-center gap-2">
+                            <i class="fas fa-fire-burner"></i> Preparing
+                        </h2>
+                    </div>
+                    <div id="kitchenPreparing" class="p-4 space-y-3 max-h-[60vh] overflow-y-auto"></div>
+                </div>
+
+                <!-- Ready Orders -->
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="bg-green-500 text-white p-4">
+                        <h2 class="text-xl font-bold flex items-center gap-2">
+                            <i class="fas fa-check-circle"></i> Ready for Pickup
+                        </h2>
+                    </div>
+                    <div id="kitchenReady" class="p-4 space-y-3 max-h-[60vh] overflow-y-auto"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ==================== OWNER DASHBOARD ==================== -->
+    <div id="ownerDashboard" class="dashboard hidden pt-16">
+        <header class="bg-purple-700 text-white shadow-lg sticky top-14 z-40">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-crown text-3xl text-yellow-400"></i>
+                        <div>
+                            <h1 class="text-2xl font-bold">Owner Dashboard</h1>
+                            <p class="text-sm opacity-80">Logged in as: <span id="ownerUserDisplay" class="font-semibold">owner</span></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-white/20 px-4 py-2 rounded-lg">
+                            <span class="text-sm">Total Revenue:</span>
+                            <span id="totalRevenue" class="font-bold text-xl ml-2">$0.00</span>
+                        </div>
+                        <button onclick="openOwnerSettings()" class="p-2 bg-white/20 rounded-lg hover:bg-white/30 flex items-center gap-2" title="My Account">
+                            <i class="fas fa-user-cog"></i>
+                            <span class="hidden md:inline">My Account</span>
+                        </button>
+                        <button onclick="logout('owner')" class="p-2 bg-red-500 rounded-lg hover:bg-red-600 flex items-center gap-2" title="Logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span class="hidden md:inline">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Owner Settings Modal -->
+        <div id="ownerSettingsModal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-md w-full modal-animate shadow-2xl overflow-hidden">
+                <div class="bg-purple-700 text-white p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-user-shield text-3xl"></i>
+                            <div>
+                                <h2 class="text-2xl font-bold">My Account</h2>
+                                <p class="text-sm opacity-80">Change your login credentials</p>
+                            </div>
+                        </div>
+                        <button onclick="closeOwnerSettings()" class="text-2xl hover:opacity-80">&times;</button>
+                    </div>
+                </div>
+                <form onsubmit="updateOwnerOwnCredentials(event)" class="p-6">
+                    <div class="space-y-4">
+                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                            <p class="text-sm text-purple-800">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                Enter your current password to verify your identity, then set your new credentials.
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-lock mr-2 text-gray-400"></i>Current Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="ownerCurrentPassword" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none pr-10" placeholder="Enter current password" required>
+                                <button type="button" onclick="togglePasswordVisibility('ownerCurrentPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <hr class="my-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-user mr-2 text-gray-400"></i>New Username
+                            </label>
+                            <input type="text" id="ownerNewUsername" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="Enter new username" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-key mr-2 text-gray-400"></i>New Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="ownerNewPassword" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none pr-10" placeholder="Enter new password" required>
+                                <button type="button" onclick="togglePasswordVisibility('ownerNewPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                <i class="fas fa-key mr-2 text-gray-400"></i>Confirm New Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="ownerConfirmNewPassword" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none pr-10" placeholder="Confirm new password" required>
+                                <button type="button" onclick="togglePasswordVisibility('ownerConfirmNewPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p id="ownerSettingsError" class="text-red-500 text-sm hidden">
+                            <i class="fas fa-exclamation-circle mr-1"></i>
+                            <span></span>
+                        </p>
+                    </div>
+                    <div class="flex gap-3 mt-6">
+                        <button type="button" onclick="closeOwnerSettings()" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                            Cancel
+                        </button>
+                        <button type="submit" class="flex-1 bg-purple-700 text-white px-4 py-3 rounded-lg hover:bg-purple-800 transition flex items-center justify-center gap-2">
+                            <i class="fas fa-save"></i> Update Credentials
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Owner Navigation -->
+        <nav class="bg-purple-600 text-white shadow">
+            <div class="container mx-auto px-4">
+                <div class="flex space-x-4 overflow-x-auto">
+                    <button onclick="showOwnerSection('overview')" class="owner-nav-tab py-3 px-4 border-b-2 border-white transition" data-section="overview">
+                        <i class="fas fa-chart-line mr-2"></i>Overview
+                    </button>
+                    <button onclick="showOwnerSection('restaurant')" class="owner-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="restaurant">
+                        <i class="fas fa-store mr-2"></i>Restaurant Info
+                    </button>
+                    <button onclick="showOwnerSection('theme')" class="owner-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="theme">
+                        <i class="fas fa-palette mr-2"></i>Theme
+                    </button>
+                    <button onclick="showOwnerSection('categories')" class="owner-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="categories">
+                        <i class="fas fa-list mr-2"></i>Categories
+                    </button>
+                    <button onclick="showOwnerSection('menuItems')" class="owner-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="menuItems">
+                        <i class="fas fa-utensils mr-2"></i>Menu Items
+                    </button>
+                    <button onclick="showOwnerSection('allOrders')" class="owner-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="allOrders">
+                        <i class="fas fa-receipt mr-2"></i>All Orders
+                    </button>
+                    <button onclick="showOwnerSection('security')" class="owner-nav-tab py-3 px-4 border-b-2 border-transparent hover:border-white transition" data-section="security">
+                        <i class="fas fa-shield-alt mr-2"></i>Security
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="container mx-auto px-4 py-6">
+            <!-- Overview Section -->
+            <section id="ownerOverviewSection" class="owner-section">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-gradient-to-br from-purple-500 to-purple-700 text-white p-6 rounded-xl shadow-lg">
+                        <i class="fas fa-shopping-bag text-4xl opacity-50 mb-2"></i>
+                        <p class="text-sm opacity-80">Total Orders</p>
+                        <p id="statTotalOrders" class="text-3xl font-bold">0</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-green-500 to-green-700 text-white p-6 rounded-xl shadow-lg">
+                        <i class="fas fa-dollar-sign text-4xl opacity-50 mb-2"></i>
+                        <p class="text-sm opacity-80">Total Revenue</p>
+                        <p id="statTotalRevenue" class="text-3xl font-bold">$0</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-blue-500 to-blue-700 text-white p-6 rounded-xl shadow-lg">
+                        <i class="fas fa-utensils text-4xl opacity-50 mb-2"></i>
+                        <p class="text-sm opacity-80">Menu Items</p>
+                        <p id="statMenuItems" class="text-3xl font-bold">0</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-orange-500 to-orange-700 text-white p-6 rounded-xl shadow-lg">
+                        <i class="fas fa-tags text-4xl opacity-50 mb-2"></i>
+                        <p class="text-sm opacity-80">Categories</p>
+                        <p id="statCategories" class="text-3xl font-bold">0</p>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-clock text-purple-600"></i> Recent Activity
+                    </h3>
+                    <div id="recentActivity" class="space-y-3 max-h-96 overflow-y-auto"></div>
+                </div>
+            </section>
+
+            <!-- Restaurant Info Section -->
+            <section id="ownerRestaurantSection" class="owner-section hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-store text-purple-600"></i> Restaurant Information
+                    </h3>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Restaurant Logo</label>
+                                <div class="flex items-center gap-4">
+                                    <img id="ownerLogoPreview" src="https://images.unsplash.com/photo-1567521464027-f127ff144326?w=100" class="w-24 h-24 rounded-full object-cover border-4 border-purple-200">
+                                    <div>
+                                        <input type="file" id="logoUpload" accept="image/*" onchange="uploadLogo(event)" class="hidden">
+                                        <button onclick="document.getElementById('logoUpload').click()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                                            <i class="fas fa-upload mr-2"></i>Upload Logo
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Restaurant Name</label>
+                                <input type="text" id="restaurantName" class="w-full p-3 border rounded-lg" placeholder="Enter restaurant name">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Address</label>
+                                <textarea id="restaurantAddress" class="w-full p-3 border rounded-lg" rows="2" placeholder="Enter address"></textarea>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Facebook URL</label>
+                                <div class="flex">
+                                    <span class="bg-gray-100 px-3 py-3 rounded-l-lg border border-r-0"><i class="fab fa-facebook text-blue-600"></i></span>
+                                    <input type="url" id="facebookUrl" class="flex-1 p-3 border rounded-r-lg" placeholder="https://facebook.com/...">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Instagram URL</label>
+                                <div class="flex">
+                                    <span class="bg-gray-100 px-3 py-3 rounded-l-lg border border-r-0"><i class="fab fa-instagram text-pink-600"></i></span>
+                                    <input type="url" id="instagramUrl" class="flex-1 p-3 border rounded-r-lg" placeholder="https://instagram.com/...">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Twitter URL</label>
+                                <div class="flex">
+                                    <span class="bg-gray-100 px-3 py-3 rounded-l-lg border border-r-0"><i class="fab fa-twitter text-blue-400"></i></span>
+                                    <input type="url" id="twitterUrl" class="flex-1 p-3 border rounded-r-lg" placeholder="https://twitter.com/...">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="saveRestaurantInfo()" class="mt-6 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 flex items-center gap-2">
+                        <i class="fas fa-save"></i> Save Restaurant Info
+                    </button>
+                </div>
+            </section>
+
+            <!-- Theme Section -->
+            <section id="ownerThemeSection" class="owner-section hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-palette text-purple-600"></i> Theme Customization
+                    </h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Primary Color</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="primaryColor" value="#ef4444" class="w-16 h-12 cursor-pointer rounded border">
+                                <span class="text-sm text-gray-500">Headers, Buttons</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Secondary Color</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="secondaryColor" value="#1f2937" class="w-16 h-12 cursor-pointer rounded border">
+                                <span class="text-sm text-gray-500">Navigation, Footer</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Accent Color</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="accentColor" value="#f59e0b" class="w-16 h-12 cursor-pointer rounded border">
+                                <span class="text-sm text-gray-500">Highlights</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Background Color</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="bgColor" value="#f3f4f6" class="w-16 h-12 cursor-pointer rounded border">
+                                <span class="text-sm text-gray-500">Page Background</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium mb-2">Background Image (Optional)</label>
+                        <div class="flex items-center gap-4">
+                            <input type="file" id="bgImageUpload" accept="image/*" onchange="uploadBgImage(event)" class="hidden">
+                            <button onclick="document.getElementById('bgImageUpload').click()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">
+                                <i class="fas fa-image mr-2"></i>Choose Image
+                            </button>
+                            <button onclick="removeBgImage()" class="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200">
+                                <i class="fas fa-trash mr-2"></i>Remove
+                            </button>
+                        </div>
+                        <div id="bgImagePreview" class="mt-4 hidden">
+                            <img id="bgPreviewImg" class="h-32 rounded-lg object-cover">
+                        </div>
+                    </div>
+                    <button onclick="applyTheme()" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 flex items-center gap-2">
+                        <i class="fas fa-paint-brush"></i> Apply Theme
+                    </button>
+                </div>
+            </section>
+
+            <!-- Categories Section -->
+            <section id="ownerCategoriesSection" class="owner-section hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-list text-purple-600"></i> Manage Categories
+                    </h3>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                        <h4 class="font-semibold mb-3">Add New Category</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                            <input type="text" id="newCategoryEn" class="p-3 border rounded-lg" placeholder="Category Name (English)">
+                            <input type="text" id="newCategoryEs" class="p-3 border rounded-lg" placeholder="Nombre (Español)">
+                            <input type="text" id="newCategoryFr" class="p-3 border rounded-lg" placeholder="Nom (Français)">
+                        </div>
+                        <button onclick="addCategory()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                            <i class="fas fa-plus mr-2"></i>Add Category
+                        </button>
+                    </div>
+                    <div id="categoriesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                </div>
+            </section>
+
+            <!-- Menu Items Section -->
+            <section id="ownerMenuItemsSection" class="owner-section hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-plus-circle text-purple-600"></i> Add New Menu Item
+                    </h3>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Item Photo</label>
+                                <input type="file" id="itemPhoto" accept="image/*" class="w-full p-2 border rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Category</label>
+                                <select id="itemCategory" class="w-full p-3 border rounded-lg"></select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Price ($)</label>
+                                    <input type="number" id="itemPrice" class="w-full p-3 border rounded-lg" step="0.01" placeholder="0.00">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Prep Time (min)</label>
+                                    <input type="number" id="itemPrepTime" class="w-full p-3 border rounded-lg" placeholder="15">
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-4">
+                                <label class="flex items-center gap-2">
+                                    <input type="checkbox" id="itemAvailable" checked class="w-4 h-4">
+                                    <span>Available</span>
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input type="checkbox" id="itemPopular" class="w-4 h-4">
+                                    <span>Popular</span>
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input type="checkbox" id="itemSpicy" class="w-4 h-4">
+                                    <span>Spicy</span>
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input type="checkbox" id="itemVegetarian" class="w-4 h-4">
+                                    <span>Vegetarian</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Name (English)</label>
+                                <input type="text" id="itemNameEn" class="w-full p-3 border rounded-lg" placeholder="Item name in English">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Name (Español)</label>
+                                <input type="text" id="itemNameEs" class="w-full p-3 border rounded-lg" placeholder="Nombre en español">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Name (Français)</label>
+                                <input type="text" id="itemNameFr" class="w-full p-3 border rounded-lg" placeholder="Nom en français">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid md:grid-cols-3 gap-4 mt-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Description (English)</label>
+                            <textarea id="itemDescEn" class="w-full p-3 border rounded-lg" rows="2" placeholder="Description in English"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Description (Español)</label>
+                            <textarea id="itemDescEs" class="w-full p-3 border rounded-lg" rows="2" placeholder="Descripción en español"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Description (Français)</label>
+                            <textarea id="itemDescFr" class="w-full p-3 border rounded-lg" rows="2" placeholder="Description en français"></textarea>
+                        </div>
+                    </div>
+                    <button onclick="addMenuItem()" class="mt-4 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Add Menu Item
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-edit text-purple-600"></i> Existing Menu Items
+                    </h3>
+                    <div id="manageMenuItems" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                </div>
+            </section>
+
+            <!-- All Orders Section -->
+            <section id="ownerAllOrdersSection" class="owner-section hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+                        <h3 class="text-xl font-bold flex items-center gap-2">
+                            <i class="fas fa-receipt text-purple-600"></i> All Orders
+                        </h3>
+                        <div class="flex gap-2 flex-wrap">
+                            <select id="orderFilterStatus" onchange="renderAllOrders()" class="px-4 py-2 border rounded-lg">
+                                <option value="all">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="preparing">Preparing</option>
+                                <option value="ready">Ready</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                            <select id="orderFilterType" onchange="renderAllOrders()" class="px-4 py-2 border rounded-lg">
+                                <option value="all">All Types</option>
+                                <option value="table">Table Orders</option>
+                                <option value="room">Room Orders</option>
+                            </select>
+                            <button onclick="confirmClearAllOrders()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center gap-2">
+                                <i class="fas fa-trash-alt"></i> Clear All Orders
+                            </button>
+                        </div>
+                    </div>
+                    <div id="allOrdersList" class="space-y-4"></div>
+                </div>
+            </section>
+            
+            <!-- Confirm Delete Modal -->
+            <div id="confirmDeleteModal" class="fixed inset-0 bg-black/60 z-[85] hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl max-w-md w-full modal-animate shadow-2xl overflow-hidden">
+                    <div class="bg-red-500 text-white p-6">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-exclamation-triangle text-3xl"></i>
+                            <div>
+                                <h2 class="text-2xl font-bold">Confirm Delete</h2>
+                                <p id="deleteModalSubtitle" class="text-sm opacity-80">This action cannot be undone</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <p id="deleteModalMessage" class="text-gray-700 mb-6">Are you sure you want to delete this order?</p>
+                        <div class="flex gap-3">
+                            <button onclick="closeConfirmDeleteModal()" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                                Cancel
+                            </button>
+                            <button id="confirmDeleteBtn" onclick="executeDelete()" class="flex-1 bg-red-500 text-white px-4 py-3 rounded-lg hover:bg-red-600 transition flex items-center justify-center gap-2">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Section -->
+            <section id="ownerSecuritySection" class="owner-section hidden">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Kitchen Credentials -->
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                            <i class="fas fa-utensils text-orange-600"></i> Kitchen Login Credentials
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Username</label>
+                                <input type="text" id="kitchenUsername" class="w-full p-3 border rounded-lg" placeholder="Kitchen username">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Password</label>
+                                <div class="relative">
+                                    <input type="password" id="kitchenPassword" class="w-full p-3 border rounded-lg pr-10" placeholder="Kitchen password">
+                                    <button type="button" onclick="togglePasswordVisibility('kitchenPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Confirm Password</label>
+                                <div class="relative">
+                                    <input type="password" id="kitchenPasswordConfirm" class="w-full p-3 border rounded-lg pr-10" placeholder="Confirm password">
+                                    <button type="button" onclick="togglePasswordVisibility('kitchenPasswordConfirm')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button onclick="updateKitchenCredentials()" class="w-full bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 flex items-center justify-center gap-2">
+                                <i class="fas fa-save"></i> Update Kitchen Credentials
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Owner Credentials -->
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                            <i class="fas fa-crown text-purple-600"></i> Owner Login Credentials
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Username</label>
+                                <input type="text" id="ownerUsername" class="w-full p-3 border rounded-lg" placeholder="Owner username">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Password</label>
+                                <div class="relative">
+                                    <input type="password" id="ownerPassword" class="w-full p-3 border rounded-lg pr-10" placeholder="Owner password">
+                                    <button type="button" onclick="togglePasswordVisibility('ownerPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Confirm Password</label>
+                                <div class="relative">
+                                    <input type="password" id="ownerPasswordConfirm" class="w-full p-3 border rounded-lg pr-10" placeholder="Confirm password">
+                                    <button type="button" onclick="togglePasswordVisibility('ownerPasswordConfirm')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button onclick="updateOwnerCredentials()" class="w-full bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2">
+                                <i class="fas fa-save"></i> Update Owner Credentials
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Default Credentials Info -->
+                <div class="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                    <h4 class="font-bold text-yellow-800 flex items-center gap-2 mb-3">
+                        <i class="fas fa-info-circle"></i> Default Credentials
+                    </h4>
+                    <div class="grid md:grid-cols-2 gap-4 text-sm">
+                        <div class="bg-white p-4 rounded-lg">
+                            <p class="font-semibold text-orange-600"><i class="fas fa-utensils mr-2"></i>Kitchen</p>
+                            <p class="text-gray-600">Username: <code class="bg-gray-100 px-2 py-1 rounded">kitchen</code></p>
+                            <p class="text-gray-600">Password: <code class="bg-gray-100 px-2 py-1 rounded">kitchen123</code></p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg">
+                            <p class="font-semibold text-purple-600"><i class="fas fa-crown mr-2"></i>Owner</p>
+                            <p class="text-gray-600">Username: <code class="bg-gray-100 px-2 py-1 rounded">owner</code></p>
+                            <p class="text-gray-600">Password: <code class="bg-gray-100 px-2 py-1 rounded">owner123</code></p>
+                        </div>
+                    </div>
+                    <p class="text-yellow-700 text-sm mt-3">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Please change the default credentials for security purposes.
+                    </p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Cart Sidebar -->
+    <div id="cartSidebar" class="fixed top-0 right-0 w-full md:w-96 h-full bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300">
+        <div class="flex flex-col h-full">
+            <div class="primary-bg text-white p-4 flex justify-between items-center">
+                <h2 class="text-xl font-bold"><i class="fas fa-shopping-cart mr-2"></i><span data-translate="yourCart">Your Cart</span></h2>
+                <button onclick="toggleCart()" class="text-2xl hover:opacity-80">&times;</button>
+            </div>
+            <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+            <div class="border-t p-4">
+                <div class="flex justify-between text-lg font-bold mb-4">
+                    <span data-translate="total">Total:</span>
+                    <span id="cartTotal">$0.00</span>
+                </div>
+                <div class="mb-4">
+                    <div class="flex gap-2 mb-3">
+                        <button onclick="setOrderType('table')" id="orderTypeTable" class="flex-1 py-3 rounded-lg font-semibold transition bg-red-500 text-white">
+                            <i class="fas fa-utensils mr-2"></i><span data-translate="table">Table</span>
+                        </button>
+                        <button onclick="setOrderType('room')" id="orderTypeRoom" class="flex-1 py-3 rounded-lg font-semibold transition bg-gray-200 text-gray-700 hover:bg-gray-300">
+                            <i class="fas fa-bed mr-2"></i><span data-translate="room">Room</span>
+                        </button>
+                    </div>
+                    <div class="relative">
+                        <span id="orderTypeIcon" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                            <i class="fas fa-utensils"></i>
+                        </span>
+                        <input type="number" id="locationNumber" placeholder="Table Number *" min="1" class="w-full pl-10 pr-4 py-3 border rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    </div>
+                    <input type="text" id="customerName" placeholder="Your Name (optional)" class="w-full p-3 border rounded-lg mt-2">
+                    <textarea id="orderNotes" placeholder="Special requests..." class="w-full p-3 border rounded-lg mt-2" rows="2"></textarea>
+                </div>
+                <button onclick="placeOrder()" class="w-full primary-bg text-white py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2">
+                    <i class="fas fa-check"></i><span data-translate="placeOrder">Place Order</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guest Notifications Panel -->
+    <div id="guestNotificationsPanel" class="fixed top-0 right-0 w-full md:w-96 h-full bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300">
+        <div class="flex flex-col h-full">
+            <div class="secondary-bg text-white p-4 flex justify-between items-center">
+                <h2 class="text-xl font-bold"><i class="fas fa-bell mr-2"></i><span data-translate="notifications">Notifications</span></h2>
+                <button onclick="toggleGuestNotifications()" class="text-2xl hover:opacity-80">&times;</button>
+            </div>
+            <div id="guestNotificationsList" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+            <div class="border-t p-4">
+                <button onclick="clearGuestNotifications()" class="w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition">
+                    <i class="fas fa-trash mr-2"></i><span data-translate="clearAll">Clear All</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Detail Modal -->
+    <div id="itemModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div class="relative">
+                <img id="modalImage" src="" alt="" class="w-full h-64 object-cover rounded-t-2xl">
+                <button onclick="closeItemModal()" class="absolute top-4 right-4 bg-white rounded-full w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 shadow-lg">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-3">
+                    <h2 id="modalName" class="text-2xl font-bold"></h2>
+                    <span id="modalPrice" class="text-2xl font-bold primary-text"></span>
+                </div>
+                <p id="modalDescription" class="text-gray-600 mb-4"></p>
+                <div id="modalBadges" class="flex gap-2 mb-4"></div>
+                <div class="flex items-center gap-4 mb-4">
+                    <span class="text-gray-600" data-translate="quantity">Quantity:</span>
+                    <div class="flex items-center border rounded-lg">
+                        <button onclick="changeModalQty(-1)" class="px-4 py-2 hover:bg-gray-100 text-xl">-</button>
+                        <span id="modalQty" class="px-4 py-2 font-bold">1</span>
+                        <button onclick="changeModalQty(1)" class="px-4 py-2 hover:bg-gray-100 text-xl">+</button>
+                    </div>
+                </div>
+                <textarea id="modalNotes" placeholder="Special instructions..." class="w-full p-3 border rounded-lg mb-4" rows="2"></textarea>
+                <button onclick="addToCartFromModal()" class="w-full primary-bg text-white py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2">
+                    <i class="fas fa-cart-plus"></i><span data-translate="addToCart">Add to Cart</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let state = {
+            currentDashboard: 'guest',
+            language: 'en',
+            cart: [],
+            orders: [],
+            notifications: [],
+            categories: [
+                { id: 'appetizers', name: { en: 'Appetizers', es: 'Aperitivos', fr: 'Entrées' } },
+                { id: 'mains', name: { en: 'Main Courses', es: 'Platos Principales', fr: 'Plats Principaux' } },
+                { id: 'desserts', name: { en: 'Desserts', es: 'Postres', fr: 'Desserts' } },
+                { id: 'drinks', name: { en: 'Drinks', es: 'Bebidas', fr: 'Boissons' } }
+            ],
+            menuItems: [
+                {
+                    id: 1, category: 'appetizers',
+                    name: { en: 'Caesar Salad', es: 'Ensalada César', fr: 'Salade César' },
+                    description: { en: 'Fresh romaine lettuce with parmesan', es: 'Lechuga romana fresca con parmesano', fr: 'Laitue romaine fraîche avec parmesan' },
+                    price: 12.99, image: 'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400',
+                    prepTime: 10, available: true, popular: true, spicy: false, vegetarian: true
+                },
+                {
+                    id: 2, category: 'mains',
+                    name: { en: 'Grilled Steak', es: 'Bistec a la Parrilla', fr: 'Steak Grillé' },
+                    description: { en: 'Premium beef with seasonal vegetables', es: 'Carne premium con vegetales de temporada', fr: 'Bœuf premium avec légumes de saison' },
+                    price: 28.99, image: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?w=400',
+                    prepTime: 25, available: true, popular: true, spicy: false, vegetarian: false
+                },
+                {
+                    id: 3, category: 'desserts',
+                    name: { en: 'Chocolate Cake', es: 'Pastel de Chocolate', fr: 'Gâteau au Chocolat' },
+                    description: { en: 'Rich chocolate cake with ganache', es: 'Pastel de chocolate rico con ganache', fr: 'Gâteau au chocolat riche avec ganache' },
+                    price: 9.99, image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400',
+                    prepTime: 5, available: true, popular: false, spicy: false, vegetarian: true
+                },
+                {
+                    id: 4, category: 'drinks',
+                    name: { en: 'Fresh Lemonade', es: 'Limonada Fresca', fr: 'Limonade Fraîche' },
+                    description: { en: 'Homemade lemonade with mint', es: 'Limonada casera con menta', fr: 'Limonade maison à la menthe' },
+                    price: 4.99, image: 'https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=400',
+                    prepTime: 3, available: true, popular: false, spicy: false, vegetarian: true
+                }
+            ],
+            restaurant: {
+                name: 'Gourmet Kitchen',
+                address: '123 Culinary Street, Food City',
+                logo: 'https://images.unsplash.com/photo-1567521464027-f127ff144326?w=100',
+                facebook: '#', instagram: '#', twitter: '#'
+            },
+            theme: {
+                primary: '#ef4444', secondary: '#1f2937',
+                accent: '#f59e0b', bg: '#f3f4f6', bgImage: ''
+            },
+            credentials: {
+                kitchen: { username: 'kitchen', password: 'kitchen123' },
+                owner: { username: 'owner', password: 'owner123' }
+            },
+            sessions: {
+                kitchen: false,
+                owner: false
+            },
+            currentItemId: null,
+            modalQty: 1
+        };
+
+        // Translations
+        const translations = {
+            en: {
+                menu: 'Menu', orderHistory: 'My Orders', contact: 'Contact',
+                yourCart: 'Your Cart', total: 'Total:', placeOrder: 'Place Order',
+                notifications: 'Notifications', clearAll: 'Clear All',
+                addToCart: 'Add to Cart', quantity: 'Quantity:',
+                sendMessage: 'Send us a message', send: 'Send',
+                orderPlaced: 'Order placed successfully!',
+                orderPreparing: 'Your order is being prepared',
+                orderReady: 'Your order is ready for pickup!',
+                noOrders: 'No orders yet', noNotifications: 'No notifications',
+                emptyCart: 'Your cart is empty', tableRequired: 'Please enter table number',
+                popular: 'Popular', spicy: 'Spicy', vegetarian: 'Vegetarian',
+                prepTime: 'min prep', all: 'All'
+            },
+            es: {
+                menu: 'Menú', orderHistory: 'Mis Pedidos', contact: 'Contacto',
+                yourCart: 'Tu Carrito', total: 'Total:', placeOrder: 'Realizar Pedido',
+                notifications: 'Notificaciones', clearAll: 'Limpiar Todo',
+                addToCart: 'Agregar al Carrito', quantity: 'Cantidad:',
+                sendMessage: 'Envíanos un mensaje', send: 'Enviar',
+                orderPlaced: '¡Pedido realizado con éxito!',
+                orderPreparing: 'Tu pedido se está preparando',
+                orderReady: '¡Tu pedido está listo para recoger!',
+                noOrders: 'Sin pedidos aún', noNotifications: 'Sin notificaciones',
+                emptyCart: 'Tu carrito está vacío', tableRequired: 'Por favor ingresa número de mesa',
+                popular: 'Popular', spicy: 'Picante', vegetarian: 'Vegetariano',
+                prepTime: 'min prep', all: 'Todo'
+            },
+            fr: {
+                menu: 'Menu', orderHistory: 'Mes Commandes', contact: 'Contact',
+                yourCart: 'Votre Panier', total: 'Total:', placeOrder: 'Passer la Commande',
+                notifications: 'Notifications', clearAll: 'Tout Effacer',
+                addToCart: 'Ajouter au Panier', quantity: 'Quantité:',
+                sendMessage: 'Envoyez-nous un message', send: 'Envoyer',
+                orderPlaced: 'Commande passée avec succès!',
+                orderPreparing: 'Votre commande est en préparation',
+                orderReady: 'Votre commande est prête!',
+                noOrders: 'Pas encore de commandes', noNotifications: 'Pas de notifications',
+                emptyCart: 'Votre panier est vide', tableRequired: 'Veuillez entrer le numéro de table',
+                popular: 'Populaire', spicy: 'Épicé', vegetarian: 'Végétarien',
+                prepTime: 'min prép', all: 'Tout'
+            }
+        };
+
+        function t(key) { return translations[state.language][key] || key; }
+
+        // LocalStorage
+        function loadState() {
+            const saved = localStorage.getItem('restaurantState');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                state = { ...state, ...parsed };
+                // Ensure credentials exist
+                if (!state.credentials) {
+                    state.credentials = {
+                        kitchen: { username: 'kitchen', password: 'kitchen123' },
+                        owner: { username: 'owner', password: 'owner123' }
+                    };
+                }
+                if (!state.sessions) {
+                    state.sessions = { kitchen: false, owner: false };
+                }
+            }
+        }
+        function saveState() { localStorage.setItem('restaurantState', JSON.stringify(state)); }
+
+        // Authentication Functions
+        function handleDashboardAccess(dashboard) {
+            if (state.sessions[dashboard]) {
+                switchDashboard(dashboard);
+            } else {
+                openLoginModal(dashboard);
+            }
+        }
+
+        function openLoginModal(type) {
+            const modal = document.getElementById('loginModal');
+            const header = document.getElementById('loginModalHeader');
+            const icon = document.getElementById('loginModalIcon');
+            const title = document.getElementById('loginModalTitle');
+            const subtitle = document.getElementById('loginModalSubtitle');
+            const submitBtn = document.getElementById('loginSubmitBtn');
+            
+            document.getElementById('loginType').value = type;
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginError').classList.add('hidden');
+            
+            if (type === 'kitchen') {
+                header.className = 'bg-orange-600 text-white p-6';
+                icon.className = 'fas fa-utensils text-3xl';
+                title.textContent = 'Kitchen Login';
+                subtitle.textContent = 'Enter your credentials to access the kitchen dashboard';
+                submitBtn.className = 'flex-1 bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 transition flex items-center justify-center gap-2';
+            } else {
+                header.className = 'bg-purple-700 text-white p-6';
+                icon.className = 'fas fa-crown text-3xl';
+                title.textContent = 'Owner Login';
+                subtitle.textContent = 'Enter your credentials to access the owner dashboard';
+                submitBtn.className = 'flex-1 bg-purple-700 text-white px-4 py-3 rounded-lg hover:bg-purple-800 transition flex items-center justify-center gap-2';
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            
+            const type = document.getElementById('loginType').value;
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            const creds = state.credentials[type];
+            
+            if (username === creds.username && password === creds.password) {
+                state.sessions[type] = true;
+                saveState();
+                closeLoginModal();
+                updateDashboardButtons();
+                switchDashboard(type);
+                showToast(`Welcome to ${type === 'kitchen' ? 'Kitchen' : 'Owner'} Dashboard!`, 'success');
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        function logout(type) {
+            state.sessions[type] = false;
+            saveState();
+            updateDashboardButtons();
+            switchDashboard('guest');
+            showToast(`Logged out from ${type === 'kitchen' ? 'Kitchen' : 'Owner'} Dashboard`, 'info');
+        }
+
+        function updateDashboardButtons() {
+            const kitchenBtn = document.querySelector('[data-dashboard="kitchen"]');
+            const ownerBtn = document.querySelector('[data-dashboard="owner"]');
+            
+            if (state.sessions.kitchen) {
+                kitchenBtn.classList.remove('locked');
+                kitchenBtn.classList.add('unlocked');
+            } else {
+                kitchenBtn.classList.remove('unlocked');
+                kitchenBtn.classList.add('locked');
+            }
+            
+            if (state.sessions.owner) {
+                ownerBtn.classList.remove('locked');
+                ownerBtn.classList.add('unlocked');
+            } else {
+                ownerBtn.classList.remove('unlocked');
+                ownerBtn.classList.add('locked');
+            }
+        }
+
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const icon = input.nextElementSibling.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        function updateKitchenCredentials() {
+            const username = document.getElementById('kitchenUsername').value;
+            const password = document.getElementById('kitchenPassword').value;
+            const confirm = document.getElementById('kitchenPasswordConfirm').value;
+            
+            if (!username || !password) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
+            
+            if (password !== confirm) {
+                showToast('Passwords do not match', 'error');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showToast('Password must be at least 6 characters', 'error');
+                return;
+            }
+            
+            state.credentials.kitchen = { username, password };
+            saveState();
+            showToast('Kitchen credentials updated successfully!', 'success');
+            
+            // Clear form
+            document.getElementById('kitchenUsername').value = '';
+            document.getElementById('kitchenPassword').value = '';
+            document.getElementById('kitchenPasswordConfirm').value = '';
+        }
+
+        function updateOwnerCredentials() {
+            const username = document.getElementById('ownerUsername').value;
+            const password = document.getElementById('ownerPassword').value;
+            const confirm = document.getElementById('ownerPasswordConfirm').value;
+            
+            if (!username || !password) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
+            
+            if (password !== confirm) {
+                showToast('Passwords do not match', 'error');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showToast('Password must be at least 6 characters', 'error');
+                return;
+            }
+            
+            state.credentials.owner = { username, password };
+            saveState();
+            showToast('Owner credentials updated successfully!', 'success');
+            
+            // Clear form
+            document.getElementById('ownerUsername').value = '';
+            document.getElementById('ownerPassword').value = '';
+            document.getElementById('ownerPasswordConfirm').value = '';
+        }
+
+        // Initialize
+        function init() {
+            loadState();
+            applyTheme();
+            updateRestaurantInfo();
+            renderMenu();
+            renderCategories();
+            renderGuestOrderHistory();
+            renderGuestNotifications();
+            updateCartUI();
+            renderKitchenOrders();
+            renderOwnerCategories();
+            renderManageMenuItems();
+            updateCategorySelect();
+            updateOwnerStats();
+            renderAllOrders();
+            renderRecentActivity();
+            updateDashboardButtons();
+            
+            document.getElementById('languageSelect').value = state.language;
+            document.getElementById('languageSelect').addEventListener('change', (e) => {
+                state.language = e.target.value;
+                saveState();
+                translatePage();
+                renderMenu();
+                renderCategories();
+                renderGuestOrderHistory();
+            });
+            
+            // Always start on guest dashboard
+            switchDashboard('guest');
+            translatePage();
+            
+            // Auto-refresh kitchen
+            setInterval(() => {
+                if (state.currentDashboard === 'kitchen' && state.sessions.kitchen) renderKitchenOrders();
+            }, 5000);
+        }
+
+        function translatePage() {
+            document.querySelectorAll('[data-translate]').forEach(el => {
+                const key = el.dataset.translate;
+                if (translations[state.language][key]) el.textContent = translations[state.language][key];
+            });
+        }
+
+        // Dashboard Switching
+        function switchDashboard(dashboard) {
+            // Check authentication for protected dashboards
+            if ((dashboard === 'kitchen' || dashboard === 'owner') && !state.sessions[dashboard]) {
+                openLoginModal(dashboard);
+                return;
+            }
+            
+            state.currentDashboard = dashboard;
+            saveState();
+            
+            document.querySelectorAll('.dashboard').forEach(d => d.classList.add('hidden'));
+            document.getElementById(dashboard + 'Dashboard').classList.remove('hidden');
+            
+            document.querySelectorAll('.dashboard-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.dashboard === dashboard) btn.classList.add('active');
+            });
+            
+            if (dashboard === 'kitchen') {
+                renderKitchenOrders();
+                document.getElementById('kitchenUserDisplay').textContent = state.credentials.kitchen.username;
+            }
+            if (dashboard === 'owner') {
+                updateOwnerStats();
+                renderOwnerCategories();
+                renderManageMenuItems();
+                renderAllOrders();
+                renderRecentActivity();
+                loadOwnerFormData();
+                document.getElementById('ownerUserDisplay').textContent = state.credentials.owner.username;
+            }
+        }
+
+        function loadOwnerFormData() {
+            document.getElementById('restaurantName').value = state.restaurant.name;
+            document.getElementById('restaurantAddress').value = state.restaurant.address;
+            document.getElementById('facebookUrl').value = state.restaurant.facebook;
+            document.getElementById('instagramUrl').value = state.restaurant.instagram;
+            document.getElementById('twitterUrl').value = state.restaurant.twitter;
+            document.getElementById('ownerLogoPreview').src = state.restaurant.logo;
+            document.getElementById('primaryColor').value = state.theme.primary;
+            document.getElementById('secondaryColor').value = state.theme.secondary;
+            document.getElementById('accentColor').value = state.theme.accent;
+            document.getElementById('bgColor').value = state.theme.bg;
+        }
+
+        // Guest Section Navigation
+        function showGuestSection(section) {
+            document.querySelectorAll('.guest-section').forEach(s => s.classList.add('hidden'));
+            document.getElementById('guest' + section.charAt(0).toUpperCase() + section.slice(1) + 'Section').classList.remove('hidden');
+            document.querySelectorAll('.guest-nav-tab').forEach(tab => {
+                tab.classList.remove('border-white');
+                tab.classList.add('border-transparent');
+            });
+            document.querySelector(`.guest-nav-tab[data-section="${section}"]`).classList.remove('border-transparent');
+            document.querySelector(`.guest-nav-tab[data-section="${section}"]`).classList.add('border-white');
+        }
+
+        // Owner Section Navigation
+        function showOwnerSection(section) {
+            document.querySelectorAll('.owner-section').forEach(s => s.classList.add('hidden'));
+            document.getElementById('owner' + section.charAt(0).toUpperCase() + section.slice(1) + 'Section').classList.remove('hidden');
+            document.querySelectorAll('.owner-nav-tab').forEach(tab => {
+                tab.classList.remove('border-white');
+                tab.classList.add('border-transparent');
+            });
+            document.querySelector(`.owner-nav-tab[data-section="${section}"]`).classList.remove('border-transparent');
+            document.querySelector(`.owner-nav-tab[data-section="${section}"]`).classList.add('border-white');
+        }
+
+        // Menu Rendering
+        function renderMenu() {
+            const grid = document.getElementById('menuGrid');
+            const lang = state.language;
+            grid.innerHTML = state.menuItems.map(item => `
+                <div class="menu-item-card bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer" onclick="openItemModal(${item.id})" data-category="${item.category}">
+                    <div class="relative">
+                        <img src="${item.image}" alt="${item.name[lang]}" class="w-full h-48 object-cover">
+                        ${!item.available ? '<div class="absolute inset-0 bg-black/50 flex items-center justify-center"><span class="text-white font-bold text-lg">Unavailable</span></div>' : ''}
+                        ${item.popular ? `<span class="absolute top-2 left-2 bg-yellow-400 text-black text-xs px-2 py-1 rounded-full font-semibold">${t('popular')}</span>` : ''}
+                    </div>
+                    <div class="p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-lg">${item.name[lang]}</h3>
+                            <span class="primary-text font-bold text-lg">$${item.price.toFixed(2)}</span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-3 line-clamp-2">${item.description[lang]}</p>
+                        <div class="flex items-center justify-between">
+                            <div class="flex gap-2">
+                                ${item.vegetarian ? '<span class="text-green-500"><i class="fas fa-leaf"></i></span>' : ''}
+                                ${item.spicy ? '<span class="text-red-500"><i class="fas fa-pepper-hot"></i></span>' : ''}
+                            </div>
+                            <span class="text-gray-400 text-xs"><i class="fas fa-clock"></i> ${item.prepTime} ${t('prepTime')}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('categoryFilters');
+            const lang = state.language;
+            container.innerHTML = `
+                <button onclick="filterByCategory('all')" class="category-btn px-4 py-2 rounded-full bg-red-500 text-white whitespace-nowrap">${t('all')}</button>
+                ${state.categories.map(cat => `
+                    <button onclick="filterByCategory('${cat.id}')" class="category-btn px-4 py-2 rounded-full bg-gray-200 text-gray-700 whitespace-nowrap hover:bg-gray-300 transition">${cat.name[lang]}</button>
+                `).join('')}
+            `;
+        }
+
+        function filterByCategory(category) {
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('bg-red-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            event.target.classList.remove('bg-gray-200', 'text-gray-700');
+            event.target.classList.add('bg-red-500', 'text-white');
+            document.querySelectorAll('.menu-item-card').forEach(card => {
+                card.style.display = (category === 'all' || card.dataset.category === category) ? 'block' : 'none';
+            });
+        }
+
+        function filterMenu() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const lang = state.language;
+            document.querySelectorAll('.menu-item-card').forEach((card, i) => {
+                const item = state.menuItems[i];
+                const match = item.name[lang].toLowerCase().includes(search) || item.description[lang].toLowerCase().includes(search);
+                card.style.display = match ? 'block' : 'none';
+            });
+        }
+
+        // Item Modal
+        function openItemModal(id) {
+            const item = state.menuItems.find(i => i.id === id);
+            if (!item || !item.available) return;
+            
+            state.currentItemId = id;
+            state.modalQty = 1;
+            const lang = state.language;
+            
+            document.getElementById('modalImage').src = item.image;
+            document.getElementById('modalName').textContent = item.name[lang];
+            document.getElementById('modalPrice').textContent = '$' + item.price.toFixed(2);
+            document.getElementById('modalDescription').textContent = item.description[lang];
+            document.getElementById('modalQty').textContent = 1;
+            document.getElementById('modalNotes').value = '';
+            
+            const badges = [];
+            if (item.popular) badges.push(`<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">${t('popular')}</span>`);
+            if (item.vegetarian) badges.push(`<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">${t('vegetarian')}</span>`);
+            if (item.spicy) badges.push(`<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">${t('spicy')}</span>`);
+            document.getElementById('modalBadges').innerHTML = badges.join('');
+            document.getElementById('itemModal').classList.remove('hidden');
+        }
+
+        function closeItemModal() { document.getElementById('itemModal').classList.add('hidden'); }
+        function changeModalQty(delta) {
+            state.modalQty = Math.max(1, state.modalQty + delta);
+            document.getElementById('modalQty').textContent = state.modalQty;
+        }
+
+        function addToCartFromModal() {
+            const item = state.menuItems.find(i => i.id === state.currentItemId);
+            state.cart.push({
+                id: Date.now(), itemId: item.id, name: item.name,
+                price: item.price, quantity: state.modalQty,
+                notes: document.getElementById('modalNotes').value, image: item.image
+            });
+            saveState();
+            updateCartUI();
+            closeItemModal();
+            showToast('Added to cart!', 'success');
+        }
+
+        // Cart
+        function toggleCart() {
+            document.getElementById('cartSidebar').classList.toggle('translate-x-full');
+            renderCart();
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cartItems');
+            const lang = state.language;
+            
+            if (state.cart.length === 0) {
+                container.innerHTML = `<div class="text-center py-8"><i class="fas fa-shopping-cart text-6xl text-gray-300 mb-4"></i><p class="text-gray-500">${t('emptyCart')}</p></div>`;
+                return;
+            }
+            
+            container.innerHTML = state.cart.map(item => `
+                <div class="flex gap-3 bg-gray-50 p-3 rounded-lg">
+                    <img src="${item.image}" alt="" class="w-16 h-16 object-cover rounded">
+                    <div class="flex-1">
+                        <h4 class="font-semibold">${item.name[lang]}</h4>
+                        <p class="text-sm text-gray-600">$${item.price.toFixed(2)} × ${item.quantity}</p>
+                        ${item.notes ? `<p class="text-xs text-gray-400 italic">"${item.notes}"</p>` : ''}
+                    </div>
+                    <button onclick="removeFromCart(${item.id})" class="text-red-500 hover:text-red-700 p-2">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            const total = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            document.getElementById('cartTotal').textContent = '$' + total.toFixed(2);
+        }
+
+        function updateCartUI() {
+            document.getElementById('cartCount').textContent = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+        }
+
+        function removeFromCart(id) {
+            state.cart = state.cart.filter(item => item.id !== id);
+            saveState();
+            updateCartUI();
+            renderCart();
+        }
+
+        // Order Type Selection
+        let currentOrderType = 'table';
+        
+        function setOrderType(type) {
+            currentOrderType = type;
+            const tableBtn = document.getElementById('orderTypeTable');
+            const roomBtn = document.getElementById('orderTypeRoom');
+            const locationInput = document.getElementById('locationNumber');
+            const iconSpan = document.getElementById('orderTypeIcon');
+            
+            if (type === 'table') {
+                tableBtn.className = 'flex-1 py-3 rounded-lg font-semibold transition bg-red-500 text-white';
+                roomBtn.className = 'flex-1 py-3 rounded-lg font-semibold transition bg-gray-200 text-gray-700 hover:bg-gray-300';
+                locationInput.placeholder = 'Table Number *';
+                iconSpan.innerHTML = '<i class="fas fa-utensils"></i>';
+            } else {
+                roomBtn.className = 'flex-1 py-3 rounded-lg font-semibold transition bg-red-500 text-white';
+                tableBtn.className = 'flex-1 py-3 rounded-lg font-semibold transition bg-gray-200 text-gray-700 hover:bg-gray-300';
+                locationInput.placeholder = 'Room Number *';
+                iconSpan.innerHTML = '<i class="fas fa-bed"></i>';
+            }
+        }
+
+        // Orders
+        function placeOrder() {
+            const locationInput = document.getElementById('locationNumber');
+            const locationNumber = parseInt(locationInput.value);
+            const customerName = document.getElementById('customerName').value;
+            
+            if (!locationInput.value || isNaN(locationNumber) || locationNumber < 1) { 
+                showToast(currentOrderType === 'table' ? 'Please enter a valid table number' : 'Please enter a valid room number', 'error'); 
+                return; 
+            }
+            if (state.cart.length === 0) { showToast(t('emptyCart'), 'error'); return; }
+            
+            const order = {
+                id: Date.now(), 
+                orderType: currentOrderType,
+                location: locationNumber,
+                customerName: customerName || 'Guest',
+                items: [...state.cart],
+                notes: document.getElementById('orderNotes').value,
+                total: state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+                status: 'pending', 
+                createdAt: new Date().toISOString()
+            };
+            
+            state.orders.unshift(order);
+            state.cart = [];
+            addNotification({ id: Date.now(), type: 'order', message: t('orderPlaced'), orderId: order.id, createdAt: new Date().toISOString() });
+            
+            saveState();
+            updateCartUI();
+            renderCart();
+            renderGuestOrderHistory();
+            renderKitchenOrders();
+            renderAllOrders();
+            toggleCart();
+            
+            // Reset form
+            document.getElementById('locationNumber').value = '';
+            document.getElementById('customerName').value = '';
+            document.getElementById('orderNotes').value = '';
+            
+            showToast(t('orderPlaced'), 'success');
+            playNotificationSound();
+        }
+
+        function renderGuestOrderHistory() {
+            const container = document.getElementById('guestOrderHistory');
+            const lang = state.language;
+            
+            if (state.orders.length === 0) {
+                container.innerHTML = `<div class="text-center py-12"><i class="fas fa-receipt text-6xl text-gray-300 mb-4"></i><p class="text-gray-500">${t('noOrders')}</p></div>`;
+                return;
+            }
+            
+            container.innerHTML = state.orders.map(order => `
+                <div class="order-card bg-white rounded-xl shadow-lg p-5">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <span class="font-bold text-lg">Order #${order.id.toString().slice(-6)}</span>
+                            <span class="ml-3 text-gray-500"><i class="fas fa-chair"></i> Table ${order.table}</span>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-sm font-semibold ${
+                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            order.status === 'preparing' ? 'bg-blue-100 text-blue-800' :
+                            order.status === 'ready' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                        }">${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
+                    </div>
+                    <div class="space-y-2 mb-4">
+                        ${order.items.map(item => `
+                            <div class="flex justify-between text-sm">
+                                <span>${item.name[lang]} × ${item.quantity}</span>
+                                <span class="font-medium">$${(item.price * item.quantity).toFixed(2)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="border-t pt-3 flex justify-between items-center">
+                        <span class="font-bold text-lg">Total: $${order.total.toFixed(2)}</span>
+                        <span class="text-xs text-gray-400">${new Date(order.createdAt).toLocaleString()}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Notifications
+        function toggleGuestNotifications() {
+            document.getElementById('guestNotificationsPanel').classList.toggle('translate-x-full');
+            renderGuestNotifications();
+        }
+
+        function addNotification(notification) {
+            state.notifications.unshift(notification);
+            saveState();
+            renderGuestNotifications();
+            updateGuestNotificationBadge();
+        }
+
+        function renderGuestNotifications() {
+            const container = document.getElementById('guestNotificationsList');
+            if (state.notifications.length === 0) {
+                container.innerHTML = `<div class="text-center py-8"><i class="fas fa-bell-slash text-6xl text-gray-300 mb-4"></i><p class="text-gray-500">${t('noNotifications')}</p></div>`;
+                return;
+            }
+            container.innerHTML = state.notifications.map(n => `
+                <div class="bg-gray-50 p-4 rounded-lg notification-toast">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center ${
+                            n.type === 'order' ? 'bg-green-100 text-green-600' :
+                            n.type === 'kitchen' ? 'bg-blue-100 text-blue-600' : 'bg-yellow-100 text-yellow-600'
+                        }">
+                            <i class="fas ${n.type === 'order' ? 'fa-check' : n.type === 'kitchen' ? 'fa-utensils' : 'fa-bell'}"></i>
+                        </div>
+                        <div class="flex-1">
+                            <p class="font-medium">${n.message}</p>
+                            <p class="text-xs text-gray-400 mt-1">${new Date(n.createdAt).toLocaleTimeString()}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateGuestNotificationBadge() {
+            const count = state.notifications.length;
+            const badge = document.getElementById('guestNotificationCount');
+            const btn = document.getElementById('guestNotificationBtn');
+            if (count > 0) {
+                badge.textContent = count > 9 ? '9+' : count;
+                badge.classList.remove('hidden');
+                btn.classList.add('has-notifications');
+            } else {
+                badge.classList.add('hidden');
+                btn.classList.remove('has-notifications');
+            }
+        }
+
+        function clearGuestNotifications() {
+            state.notifications = [];
+            saveState();
+            renderGuestNotifications();
+            updateGuestNotificationBadge();
+        }
+
+        // Kitchen Dashboard
+        function renderKitchenOrders() {
+            const pending = state.orders.filter(o => o.status === 'pending');
+            const preparing = state.orders.filter(o => o.status === 'preparing');
+            const ready = state.orders.filter(o => o.status === 'ready');
+            const completed = state.orders.filter(o => o.status === 'completed');
+            
+            document.getElementById('pendingCount').textContent = pending.length;
+            document.getElementById('preparingCount').textContent = preparing.length;
+            document.getElementById('readyCount').textContent = ready.length;
+            document.getElementById('completedCount').textContent = completed.length;
+            document.getElementById('activeOrderCount').textContent = pending.length + preparing.length + ready.length;
+            
+            const renderOrderCard = (order, actions) => {
+                const orderType = order.orderType || 'table';
+                const location = order.location || order.table || 'N/A';
+                const customerName = order.customerName || 'Guest';
+                const isRoom = orderType === 'room';
+                
+                return `
+                <div class="order-card bg-gray-50 p-4 rounded-lg border-l-4 ${
+                    order.status === 'pending' ? 'border-yellow-500' :
+                    order.status === 'preparing' ? 'border-blue-500' : 'border-green-500'
+                }">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-bold">#${order.id.toString().slice(-6)}</span>
+                        <span class="px-2 py-1 rounded text-sm ${isRoom ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">
+                            <i class="fas ${isRoom ? 'fa-bed' : 'fa-utensils'} mr-1"></i>
+                            ${isRoom ? 'Room' : 'Table'} ${location}
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-2"><i class="fas fa-user mr-1"></i>${customerName}</p>
+                    <div class="text-sm space-y-1 mb-3">
+                        ${order.items.map(item => `<div class="flex justify-between"><span>${item.name.en}</span><span class="font-medium">×${item.quantity}</span></div>`).join('')}
+                    </div>
+                    ${order.notes ? `<p class="text-xs text-gray-500 mb-2 italic">"${order.notes}"</p>` : ''}
+                    <p class="text-xs text-gray-400 mb-3">${new Date(order.createdAt).toLocaleTimeString()}</p>
+                    <div class="flex gap-2">${actions}</div>
+                </div>
+            `;};
+            
+            document.getElementById('kitchenPending').innerHTML = pending.length ? pending.map(o => 
+                renderOrderCard(o, `<button onclick="updateOrderStatus(${o.id}, 'preparing')" class="flex-1 bg-blue-500 text-white py-2 rounded text-sm hover:bg-blue-600"><i class="fas fa-fire mr-1"></i>Start</button>`)
+            ).join('') : '<p class="text-center text-gray-400 py-4">No pending orders</p>';
+            
+            document.getElementById('kitchenPreparing').innerHTML = preparing.length ? preparing.map(o => 
+                renderOrderCard(o, `<button onclick="markOrderReady(${o.id})" class="flex-1 bg-green-500 text-white py-2 rounded text-sm hover:bg-green-600"><i class="fas fa-check mr-1"></i>Ready</button>`)
+            ).join('') : '<p class="text-center text-gray-400 py-4">No orders preparing</p>';
+            
+            document.getElementById('kitchenReady').innerHTML = ready.length ? ready.map(o => 
+                renderOrderCard(o, `<button onclick="updateOrderStatus(${o.id}, 'completed')" class="flex-1 bg-gray-500 text-white py-2 rounded text-sm hover:bg-gray-600"><i class="fas fa-check-double mr-1"></i>Complete</button>`)
+            ).join('') : '<p class="text-center text-gray-400 py-4">No orders ready</p>';
+        }
+
+        function updateOrderStatus(orderId, status) {
+            const order = state.orders.find(o => o.id === orderId);
+            if (order) {
+                order.status = status;
+                saveState();
+                renderGuestOrderHistory();
+                renderKitchenOrders();
+                renderAllOrders();
+                updateOwnerStats();
+            }
+        }
+
+        function markOrderReady(orderId) {
+            updateOrderStatus(orderId, 'ready');
+            addNotification({ id: Date.now(), type: 'kitchen', message: t('orderReady'), orderId, createdAt: new Date().toISOString() });
+            showToast(t('orderReady'), 'success');
+            playNotificationSound();
+        }
+
+        // Owner Dashboard
+        function updateOwnerStats() {
+            document.getElementById('statTotalOrders').textContent = state.orders.length;
+            const revenue = state.orders.reduce((sum, o) => sum + o.total, 0);
+            document.getElementById('statTotalRevenue').textContent = '$' + revenue.toFixed(2);
+            document.getElementById('totalRevenue').textContent = '$' + revenue.toFixed(2);
+            document.getElementById('statMenuItems').textContent = state.menuItems.length;
+            document.getElementById('statCategories').textContent = state.categories.length;
+        }
+
+        function renderRecentActivity() {
+            const container = document.getElementById('recentActivity');
+            const activities = state.orders.slice(0, 10).map(o => ({
+                icon: 'fa-shopping-bag', color: 'purple',
+                text: `Order #${o.id.toString().slice(-6)} - Table ${o.table} - $${o.total.toFixed(2)}`,
+                status: o.status, time: o.createdAt
+            }));
+            container.innerHTML = activities.length ? activities.map(a => `
+                <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                    <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+                        <i class="fas ${a.icon}"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-medium">${a.text}</p>
+                        <p class="text-xs text-gray-400">${new Date(a.time).toLocaleString()}</p>
+                    </div>
+                    <span class="px-2 py-1 rounded text-xs ${
+                        a.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                        a.status === 'preparing' ? 'bg-blue-100 text-blue-700' :
+                        a.status === 'ready' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                    }">${a.status}</span>
+                </div>
+            `).join('') : '<p class="text-center text-gray-400 py-4">No recent activity</p>';
+        }
+
+        function uploadLogo(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    state.restaurant.logo = e.target.result;
+                    document.getElementById('ownerLogoPreview').src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function saveRestaurantInfo() {
+            state.restaurant.name = document.getElementById('restaurantName').value || state.restaurant.name;
+            state.restaurant.address = document.getElementById('restaurantAddress').value || state.restaurant.address;
+            state.restaurant.facebook = document.getElementById('facebookUrl').value || '#';
+            state.restaurant.instagram = document.getElementById('instagramUrl').value || '#';
+            state.restaurant.twitter = document.getElementById('twitterUrl').value || '#';
+            saveState();
+            updateRestaurantInfo();
+            showToast('Restaurant info saved!', 'success');
+        }
+
+        function updateRestaurantInfo() {
+            const r = state.restaurant;
+            document.getElementById('guestName').textContent = r.name;
+            document.getElementById('guestAddress').textContent = r.address;
+            document.getElementById('guestLogo').src = r.logo;
+            document.getElementById('footerName').textContent = r.name;
+            document.getElementById('footerAddress').textContent = r.address;
+            document.getElementById('footerLogo').src = r.logo;
+            document.getElementById('contactAddress').textContent = r.address;
+            document.getElementById('selectorLogo').src = r.logo;
+            document.getElementById('selectorName').textContent = r.name;
+            document.title = r.name + ' - Ordering System';
+        }
+
+        function uploadBgImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    state.theme.bgImage = e.target.result;
+                    document.getElementById('bgPreviewImg').src = e.target.result;
+                    document.getElementById('bgImagePreview').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeBgImage() {
+            state.theme.bgImage = '';
+            document.body.style.backgroundImage = '';
+            document.getElementById('bgImagePreview').classList.add('hidden');
+            saveState();
+        }
+
+        function applyTheme() {
+            const primary = document.getElementById('primaryColor')?.value || state.theme.primary;
+            const secondary = document.getElementById('secondaryColor')?.value || state.theme.secondary;
+            const accent = document.getElementById('accentColor')?.value || state.theme.accent;
+            const bg = document.getElementById('bgColor')?.value || state.theme.bg;
+            
+            state.theme = { ...state.theme, primary, secondary, accent, bg };
+            
+            document.documentElement.style.setProperty('--primary-color', primary);
+            document.documentElement.style.setProperty('--secondary-color', secondary);
+            document.documentElement.style.setProperty('--accent-color', accent);
+            document.documentElement.style.setProperty('--bg-color', bg);
+            
+            if (state.theme.bgImage) {
+                document.body.style.backgroundImage = `url(${state.theme.bgImage})`;
+                document.body.style.backgroundSize = 'cover';
+                document.body.style.backgroundAttachment = 'fixed';
+            }
+            
+            saveState();
+            showToast('Theme applied!', 'success');
+        }
+
+        // Categories Management
+        function addCategory() {
+            const nameEn = document.getElementById('newCategoryEn').value;
+            const nameEs = document.getElementById('newCategoryEs').value;
+            const nameFr = document.getElementById('newCategoryFr').value;
+            
+            if (!nameEn) { showToast('Please enter category name in English', 'error'); return; }
+            
+            state.categories.push({
+                id: nameEn.toLowerCase().replace(/\s+/g, '-'),
+                name: { en: nameEn, es: nameEs || nameEn, fr: nameFr || nameEn }
+            });
+            
+            saveState();
+            renderCategories();
+            renderOwnerCategories();
+            updateCategorySelect();
+            updateOwnerStats();
+            
+            document.getElementById('newCategoryEn').value = '';
+            document.getElementById('newCategoryEs').value = '';
+            document.getElementById('newCategoryFr').value = '';
+            showToast('Category added!', 'success');
+        }
+
+        function renderOwnerCategories() {
+            document.getElementById('categoriesList').innerHTML = state.categories.map(cat => `
+                <div class="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                    <div>
+                        <p class="font-semibold">${cat.name.en}</p>
+                        <p class="text-sm text-gray-500">${cat.name.es} | ${cat.name.fr}</p>
+                    </div>
+                    <button onclick="deleteCategory('${cat.id}')" class="text-red-500 hover:text-red-700 p-2">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function deleteCategory(id) {
+            state.categories = state.categories.filter(c => c.id !== id);
+            saveState();
+            renderCategories();
+            renderOwnerCategories();
+            updateCategorySelect();
+            updateOwnerStats();
+            showToast('Category deleted!', 'success');
+        }
+
+        function updateCategorySelect() {
+            document.getElementById('itemCategory').innerHTML = '<option value="">Select Category</option>' +
+                state.categories.map(cat => `<option value="${cat.id}">${cat.name.en}</option>`).join('');
+        }
+
+        // Menu Items Management
+        function addMenuItem() {
+            const photoInput = document.getElementById('itemPhoto');
+            const category = document.getElementById('itemCategory').value;
+            const nameEn = document.getElementById('itemNameEn').value;
+            const price = parseFloat(document.getElementById('itemPrice').value);
+            
+            if (!category || !nameEn || !price) { showToast('Please fill required fields', 'error'); return; }
+            
+            const processItem = (imageData) => {
+                state.menuItems.push({
+                    id: Date.now(), category,
+                    name: { en: nameEn, es: document.getElementById('itemNameEs').value || nameEn, fr: document.getElementById('itemNameFr').value || nameEn },
+                    description: { en: document.getElementById('itemDescEn').value, es: document.getElementById('itemDescEs').value || document.getElementById('itemDescEn').value, fr: document.getElementById('itemDescFr').value || document.getElementById('itemDescEn').value },
+                    price, prepTime: parseInt(document.getElementById('itemPrepTime').value) || 15,
+                    image: imageData || 'https://via.placeholder.com/400',
+                    available: document.getElementById('itemAvailable').checked,
+                    popular: document.getElementById('itemPopular').checked,
+                    spicy: document.getElementById('itemSpicy').checked,
+                    vegetarian: document.getElementById('itemVegetarian').checked
+                });
+                
+                saveState();
+                renderMenu();
+                renderManageMenuItems();
+                updateOwnerStats();
+                
+                ['itemPhoto', 'itemCategory', 'itemNameEn', 'itemNameEs', 'itemNameFr', 'itemDescEn', 'itemDescEs', 'itemDescFr', 'itemPrice', 'itemPrepTime'].forEach(id => document.getElementById(id).value = '');
+                showToast('Menu item added!', 'success');
+            };
+            
+            if (photoInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => processItem(e.target.result);
+                reader.readAsDataURL(photoInput.files[0]);
+            } else processItem(null);
+        }
+
+        function renderManageMenuItems() {
+            document.getElementById('manageMenuItems').innerHTML = state.menuItems.map(item => `
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex gap-3">
+                        <img src="${item.image}" alt="" class="w-20 h-20 object-cover rounded-lg">
+                        <div class="flex-1">
+                            <h4 class="font-semibold">${item.name.en}</h4>
+                            <p class="text-sm text-gray-600">$${item.price.toFixed(2)}</p>
+                            <div class="flex gap-2 mt-2">
+                                ${item.available ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Available</span>' : '<span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Unavailable</span>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="toggleItemAvailability(${item.id})" class="flex-1 ${item.available ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'} py-2 rounded text-sm">
+                            ${item.available ? '<i class="fas fa-eye-slash mr-1"></i>Hide' : '<i class="fas fa-eye mr-1"></i>Show'}
+                        </button>
+                        <button onclick="deleteMenuItem(${item.id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded text-sm">
+                            <i class="fas fa-trash mr-1"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleItemAvailability(id) {
+            const item = state.menuItems.find(i => i.id === id);
+            if (item) { item.available = !item.available; saveState(); renderMenu(); renderManageMenuItems(); }
+        }
+
+        function deleteMenuItem(id) {
+            state.menuItems = state.menuItems.filter(i => i.id !== id);
+            saveState();
+            renderMenu();
+            renderManageMenuItems();
+            updateOwnerStats();
+            showToast('Item deleted!', 'success');
+        }
+
+        // Delete order management
+        let pendingDeleteAction = null;
+        
+        function confirmClearAllOrders() {
+            pendingDeleteAction = { type: 'clearAll' };
+            document.getElementById('deleteModalMessage').textContent = `Are you sure you want to delete ALL ${state.orders.length} orders? This action cannot be undone.`;
+            document.getElementById('confirmDeleteModal').classList.remove('hidden');
+        }
+        
+        function confirmDeleteOrder(orderId) {
+            pendingDeleteAction = { type: 'single', orderId };
+            const order = state.orders.find(o => o.id === orderId);
+            document.getElementById('deleteModalMessage').textContent = `Are you sure you want to delete Order #${orderId.toString().slice(-6)}?`;
+            document.getElementById('confirmDeleteModal').classList.remove('hidden');
+        }
+        
+        function closeConfirmDeleteModal() {
+            document.getElementById('confirmDeleteModal').classList.add('hidden');
+            pendingDeleteAction = null;
+        }
+        
+        function executeDelete() {
+            if (!pendingDeleteAction) return;
+            
+            if (pendingDeleteAction.type === 'clearAll') {
+                state.orders = [];
+                showToast('All orders have been deleted!', 'success');
+            } else if (pendingDeleteAction.type === 'single') {
+                state.orders = state.orders.filter(o => o.id !== pendingDeleteAction.orderId);
+                showToast('Order deleted successfully!', 'success');
+            }
+            
+            saveState();
+            renderAllOrders();
+            renderGuestOrderHistory();
+            renderKitchenOrders();
+            renderRecentActivity();
+            updateOwnerStats();
+            closeConfirmDeleteModal();
+        }
+
+        function renderAllOrders() {
+            const container = document.getElementById('allOrdersList');
+            const statusFilter = document.getElementById('orderFilterStatus')?.value || 'all';
+            const typeFilter = document.getElementById('orderFilterType')?.value || 'all';
+            
+            let filteredOrders = state.orders;
+            
+            // Apply status filter
+            if (statusFilter !== 'all') {
+                filteredOrders = filteredOrders.filter(o => o.status === statusFilter);
+            }
+            
+            // Apply type filter
+            if (typeFilter !== 'all') {
+                filteredOrders = filteredOrders.filter(o => (o.orderType || 'table') === typeFilter);
+            }
+            
+            if (filteredOrders.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 py-8">No orders found</p>';
+                return;
+            }
+            
+            container.innerHTML = filteredOrders.map(order => {
+                const orderType = order.orderType || 'table';
+                const location = order.location || order.table || 'N/A';
+                const customerName = order.customerName || 'Guest';
+                
+                return `
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="font-bold text-lg">#${order.id.toString().slice(-6)}</span>
+                                <span class="px-2 py-1 rounded text-xs ${orderType === 'table' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}">
+                                    <i class="fas ${orderType === 'table' ? 'fa-utensils' : 'fa-bed'} mr-1"></i>
+                                    ${orderType === 'table' ? 'Table' : 'Room'} ${location}
+                                </span>
+                                <span class="px-2 py-1 rounded-full text-xs font-semibold ${
+                                    order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                    order.status === 'preparing' ? 'bg-blue-100 text-blue-800' :
+                                    order.status === 'ready' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }">${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                <i class="fas fa-user mr-1"></i>${customerName} • 
+                                ${order.items.length} items • 
+                                <span class="font-semibold">${order.total.toFixed(2)}</span>
+                            </p>
+                            <p class="text-xs text-gray-400 mt-1">
+                                <i class="fas fa-clock mr-1"></i>${new Date(order.createdAt).toLocaleString()}
+                            </p>
+                            ${order.notes ? `<p class="text-xs text-gray-500 mt-1 italic"><i class="fas fa-comment mr-1"></i>"${order.notes}"</p>` : ''}
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="confirmDeleteOrder(${order.id})" class="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm flex items-center gap-1">
+                                <i class="fas fa-trash"></i>
+                                <span class="hidden md:inline">Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+
+        // Utilities
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `notification-toast p-4 rounded-lg shadow-lg max-w-sm ${
+                type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            } text-white`;
+            toast.innerHTML = `<div class="flex items-center gap-3"><i class="fas ${
+                type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'
+            }"></i><span>${message}</span></div>`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function playNotificationSound() {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2k+O3Kj2teleD47bqPY2KlgPDpup9LWpWA8PW6m0teleEA6bqbT2ahePTxupNTbo14/PG6j1NsA');
+            audio.play().catch(() => {});
+        }
+
+        function sendMessage(event) {
+            event.preventDefault();
+            showToast('Message sent successfully!', 'success');
+            event.target.reset();
+        }
+
+        // Kitchen Settings Modal Functions
+        function openKitchenSettings() {
+            document.getElementById('kitchenSettingsModal').classList.remove('hidden');
+            document.getElementById('kitchenCurrentPassword').value = '';
+            document.getElementById('kitchenNewUsername').value = state.credentials.kitchen.username;
+            document.getElementById('kitchenNewPassword').value = '';
+            document.getElementById('kitchenConfirmNewPassword').value = '';
+            document.getElementById('kitchenSettingsError').classList.add('hidden');
+        }
+
+        function closeKitchenSettings() {
+            document.getElementById('kitchenSettingsModal').classList.add('hidden');
+        }
+
+        function updateKitchenOwnCredentials(event) {
+            event.preventDefault();
+            
+            const currentPassword = document.getElementById('kitchenCurrentPassword').value;
+            const newUsername = document.getElementById('kitchenNewUsername').value;
+            const newPassword = document.getElementById('kitchenNewPassword').value;
+            const confirmPassword = document.getElementById('kitchenConfirmNewPassword').value;
+            const errorEl = document.getElementById('kitchenSettingsError');
+            
+            // Verify current password
+            if (currentPassword !== state.credentials.kitchen.password) {
+                errorEl.querySelector('span').textContent = 'Current password is incorrect';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Validate new username
+            if (!newUsername || newUsername.length < 3) {
+                errorEl.querySelector('span').textContent = 'Username must be at least 3 characters';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Validate new password
+            if (!newPassword || newPassword.length < 6) {
+                errorEl.querySelector('span').textContent = 'New password must be at least 6 characters';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Check passwords match
+            if (newPassword !== confirmPassword) {
+                errorEl.querySelector('span').textContent = 'New passwords do not match';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Update credentials
+            state.credentials.kitchen = { username: newUsername, password: newPassword };
+            saveState();
+            
+            // Update display
+            document.getElementById('kitchenUserDisplay').textContent = newUsername;
+            
+            closeKitchenSettings();
+            showToast('Kitchen credentials updated successfully!', 'success');
+        }
+
+        // Owner Settings Modal Functions
+        function openOwnerSettings() {
+            document.getElementById('ownerSettingsModal').classList.remove('hidden');
+            document.getElementById('ownerCurrentPassword').value = '';
+            document.getElementById('ownerNewUsername').value = state.credentials.owner.username;
+            document.getElementById('ownerNewPassword').value = '';
+            document.getElementById('ownerConfirmNewPassword').value = '';
+            document.getElementById('ownerSettingsError').classList.add('hidden');
+        }
+
+        function closeOwnerSettings() {
+            document.getElementById('ownerSettingsModal').classList.add('hidden');
+        }
+
+        function updateOwnerOwnCredentials(event) {
+            event.preventDefault();
+            
+            const currentPassword = document.getElementById('ownerCurrentPassword').value;
+            const newUsername = document.getElementById('ownerNewUsername').value;
+            const newPassword = document.getElementById('ownerNewPassword').value;
+            const confirmPassword = document.getElementById('ownerConfirmNewPassword').value;
+            const errorEl = document.getElementById('ownerSettingsError');
+            
+            // Verify current password
+            if (currentPassword !== state.credentials.owner.password) {
+                errorEl.querySelector('span').textContent = 'Current password is incorrect';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Validate new username
+            if (!newUsername || newUsername.length < 3) {
+                errorEl.querySelector('span').textContent = 'Username must be at least 3 characters';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Validate new password
+            if (!newPassword || newPassword.length < 6) {
+                errorEl.querySelector('span').textContent = 'New password must be at least 6 characters';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Check passwords match
+            if (newPassword !== confirmPassword) {
+                errorEl.querySelector('span').textContent = 'New passwords do not match';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            // Update credentials
+            state.credentials.owner = { username: newUsername, password: newPassword };
+            saveState();
+            
+            // Update display
+            document.getElementById('ownerUserDisplay').textContent = newUsername;
+            
+            closeOwnerSettings();
+            showToast('Owner credentials updated successfully!', 'success');
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
